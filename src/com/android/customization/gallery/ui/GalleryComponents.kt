@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import com.android.customization.gallery.SystemClocks
 import com.android.compose.ui.graphics.painter.rememberDrawablePainter
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.produceState
@@ -85,12 +86,19 @@ fun WallpaperImage(
     wallpaper: GalleryWallpaper,
     modifier: Modifier = Modifier,
     weather: GalleryWeather.Snapshot? = null,
+    fullScreen: Boolean = false,
+    onReady: (() -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current
         val context = LocalContext.current
-        val w = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
-        val h = with(density) { maxHeight.roundToPx() }.coerceAtLeast(1)
+        // A card that changes size every frame renders once and scales; at half the display's
+        // size, as it is only full screen for a moment.
+        val display = context.resources.displayMetrics
+        val w = if (fullScreen) display.widthPixels / 2
+            else with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
+        val h = if (fullScreen) display.heightPixels / 2
+            else with(density) { maxHeight.roundToPx() }.coerceAtLeast(1)
         val bitmap by produceState<Bitmap?>(null, wallpaper, w, h, weather) {
             value = withContext(Dispatchers.Default) {
                 Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
@@ -99,6 +107,7 @@ fun WallpaperImage(
                 }
             }
         }
+        if (bitmap != null && onReady != null) LaunchedEffect(Unit) { onReady() }
         bitmap?.let {
             Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         } ?: Box(Modifier.fillMaxSize().background(Color(0xFF1C1C1E)))
@@ -234,6 +243,7 @@ fun CustomClockLayer(
     style: ClockStyle,
     modifier: Modifier = Modifier,
     tuning: CustomClocks.Tuning? = null,
+    onReady: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val frame = remember(tuning) {
@@ -250,6 +260,7 @@ fun CustomClockLayer(
             CustomClocks.preview(context, style.face, frame.width, color, gradient = gradient)
         }
     }
+    if (preview != null && onReady != null) LaunchedEffect(Unit) { onReady() }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val bitmap = preview ?: return@BoxWithConstraints
         val k = constraints.maxWidth / context.resources.displayMetrics.widthPixels.toFloat()
@@ -290,8 +301,13 @@ fun LockScreenCard(
     corner: Dp = 24.dp,
     weather: GalleryWeather.Snapshot? = null,
     onClick: (() -> Unit)? = null,
+    fullScreen: Boolean = false,
+    onReady: (() -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(corner.coerceAtLeast(0.dp))
+    var wallpaperReady by remember { mutableStateOf(false) }
+    var clockReady by remember { mutableStateOf(clock.face == 0) }
+    if (wallpaperReady && clockReady && onReady != null) LaunchedEffect(Unit) { onReady() }
     val onLight = rememberTopLight(wallpaper)
     BoxWithConstraints(
         modifier
@@ -300,10 +316,12 @@ fun LockScreenCard(
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         // The still stays underneath, so turning live never flashes an empty card.
-        WallpaperImage(wallpaper, Modifier.fillMaxSize(), weather)
+        WallpaperImage(wallpaper, Modifier.fillMaxSize(), weather, fullScreen) {
+            wallpaperReady = true
+        }
         if (live && wallpaper.isAnimated) LiveWallpaper(wallpaper, Modifier.fillMaxSize(), weather)
         if (clock.face > 0) {
-            CustomClockLayer(clock)
+            CustomClockLayer(clock) { clockReady = true }
             return@BoxWithConstraints
         }
         val clockHeight = maxHeight * if (clock.small) 0.06f else 0.24f

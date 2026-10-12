@@ -122,7 +122,7 @@
         <activity
             android:name="com.android.customization.gallery.ui.LockScreenGalleryActivity"
             android:label="@string/gallery_title"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+            android:theme="@style/LockScreenGalleryTheme"
             android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTask"

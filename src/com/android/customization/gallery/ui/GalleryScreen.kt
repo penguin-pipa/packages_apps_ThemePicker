@@ -131,10 +131,15 @@ fun GalleryScreen(
                     }
                     item {
                         SourceButton(stringResource(R.string.gallery_live), null, Icons.Rounded.AutoAwesome) {
-                            runCatching {
-                                context.startActivity(android.content.Intent(
-                                    android.app.WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
+                            val chooser = {
+                                runCatching {
+                                    context.startActivity(android.content.Intent(
+                                        android.app.WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
+                                }
+                                Unit
                             }
+                            (context as? LockScreenGalleryActivity)?.leavingLockScreen(chooser)
+                                ?: chooser()
                         }
                     }
                 }

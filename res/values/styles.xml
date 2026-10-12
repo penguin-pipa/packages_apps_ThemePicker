@@ -150,4 +150,9 @@
         <item name="android:gravity">center</item>
     </style>
 
+    <!-- No starting window: the gallery's first frame is the lock screen it opens from. -->
+    <style name="LockScreenGalleryTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
 </resources>

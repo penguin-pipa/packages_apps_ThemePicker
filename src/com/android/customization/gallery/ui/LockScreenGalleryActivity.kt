@@ -1,12 +1,18 @@
 package com.android.customization.gallery.ui
 
 import android.Manifest
+import android.app.KeyguardManager
 import android.app.WallpaperManager
+import android.content.BroadcastReceiver
 import android.content.ContentUris
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
+import android.view.ViewTreeObserver
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -65,6 +71,12 @@ class LockScreenGalleryActivity : Hilt_LockScreenGalleryActivity() {
     @Inject lateinit var clockInteractor: ClockPickerInteractor
     @Inject lateinit var affordanceInteractor: KeyguardQuickAffordancePickerInteractor
 
+    private var overLockScreen = false
+    private val screenOff =
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = finish()
+        }
+
     private sealed interface Screen {
         /** [zoomIn]: arrive as a full lock screen shrinking into its card. */
         data class Switcher(val zoomIn: Boolean) : Screen
@@ -83,6 +95,7 @@ class LockScreenGalleryActivity : Hilt_LockScreenGalleryActivity() {
             android.R.anim.fade_out)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        showOverLockScreen(intent)
         val store = GalleryStore.get(this)
         val startInGallery = intent.getBooleanExtra(EXTRA_GALLERY, false)
         val startOnClock = intent.getBooleanExtra(EXTRA_CLOCK, false)
@@ -96,6 +109,7 @@ class LockScreenGalleryActivity : Hilt_LockScreenGalleryActivity() {
         lifecycleScope.launch {
             clockInteractor.selectedClockId.collect { SystemClocks.selectedId = it }
         }
+        if (!startInGallery && !startOnClock) holdFirstFrame()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 var screen by remember {
@@ -188,6 +202,7 @@ class LockScreenGalleryActivity : Hilt_LockScreenGalleryActivity() {
                             store = store,
                             version = version,
                             zoomIn = current.zoomIn,
+                            onReady = ::releaseFirstFrame,
                             onApply = { lockScreen ->
                                 apply(lockScreen)
                             },
@@ -202,7 +217,9 @@ class LockScreenGalleryActivity : Hilt_LockScreenGalleryActivity() {
                             featured = remember(version) { featuredPhotos() },
                             hasPhotoAccess = hasPhotoAccess(),
                             onRequestPhotoAccess = {
-                                requestPhotos.launch(Manifest.permission.READ_MEDIA_IMAGES)
+                                leavingLockScreen {
+                                    requestPhotos.launch(Manifest.permission.READ_MEDIA_IMAGES)
+                                }
                             },
                             onCancel = {
                                 if (startInGallery) finish() else screen = Screen.Switcher(false)
@@ -222,16 +239,22 @@ class LockScreenGalleryActivity : Hilt_LockScreenGalleryActivity() {
                                 }
                             },
                             onPickPhoto = {
-                                pickPhoto.launch(PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                leavingLockScreen {
+                                    pickPhoto.launch(PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                }
                             },
                             onPickShuffle = {
-                                pickShuffle.launch(PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                leavingLockScreen {
+                                    pickShuffle.launch(PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                }
                             },
                             onPickKaleidoscope = {
-                                pickKaleidoscope.launch(PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                leavingLockScreen {
+                                    pickKaleidoscope.launch(PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                }
                             },
                         )
                         is Screen.Customise -> CustomiseScreen(
@@ -285,6 +308,62 @@ class LockScreenGalleryActivity : Hilt_LockScreenGalleryActivity() {
             }
         }
         return photos
+    }
+
+    private var firstFrameHeld = false
+    private val holdFirstFrame =
+        ViewTreeObserver.OnPreDrawListener { !firstFrameHeld }
+
+    /** Keeps the window off screen until the lock screen it opens from is drawn full size. */
+    private fun holdFirstFrame() {
+        firstFrameHeld = true
+        window.decorView.viewTreeObserver.addOnPreDrawListener(holdFirstFrame)
+    }
+
+    private fun releaseFirstFrame() {
+        if (!firstFrameHeld) return
+        firstFrameHeld = false
+        window.decorView.viewTreeObserver.removeOnPreDrawListener(holdFirstFrame)
+        window.decorView.invalidate()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        showOverLockScreen(intent)
+    }
+
+    override fun onDestroy() {
+        if (overLockScreen) unregisterReceiver(screenOff)
+        super.onDestroy()
+    }
+
+    /**
+     * Opened from an unlocked lock screen, the gallery shows over it, so choosing a lock screen
+     * lands back on it. Locking the phone closes it there.
+     */
+    private fun showOverLockScreen(intent: Intent) {
+        val over = intent.getBooleanExtra(EXTRA_OVER_LOCK_SCREEN, false)
+        setShowWhenLocked(over)
+        // Over the lock screen it closes as the full-size lock screen, which is what is beneath.
+        if (over) overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
+        if (over && !overLockScreen) {
+            registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        } else if (!over && overLockScreen) {
+            unregisterReceiver(screenOff)
+        }
+        overLockScreen = over
+    }
+
+    /** Runs [action], which opens another app's screen, once the lock screen is out of the way. */
+    fun leavingLockScreen(action: () -> Unit) {
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        if (!overLockScreen || !keyguard.isKeyguardLocked) {
+            action()
+            return
+        }
+        keyguard.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+            override fun onDismissSucceeded() = action()
+        })
     }
 
     private fun apply(lockScreen: LockScreen, tuning: CustomClocks.Tuning? = null) {
@@ -355,6 +434,7 @@ class LockScreenGalleryActivity : Hilt_LockScreenGalleryActivity() {
             )
         const val EXTRA_GALLERY = "gallery"
         const val EXTRA_CLOCK = "clock"
+        const val EXTRA_OVER_LOCK_SCREEN = "over_lock_screen"
         private const val MAX_SHUFFLE = 30
         private const val FEATURED = 6
     }

@@ -40,6 +40,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -72,6 +74,7 @@ import com.android.customization.gallery.LockScreen
 import com.android.themepicker.R
 import kotlin.math.abs
 import kotlin.math.min
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 fun wallpaperLabel(wallpaper: GalleryWallpaper): Int = when (wallpaper.kind) {
@@ -105,6 +108,7 @@ fun SwitcherScreen(
     onCustomise: (LockScreen) -> Unit,
     onAdd: () -> Unit,
     onDelete: (LockScreen) -> Unit,
+    onReady: () -> Unit = {},
 ) {
     var changes by remember { mutableIntStateOf(0) }
     DisposableEffect(store) {
@@ -124,8 +128,22 @@ fun SwitcherScreen(
     var zooming by remember { mutableStateOf<LockScreen?>(null) }
     val spring = spring<Float>(dampingRatio = 0.86f, stiffness = 320f)
 
-    LaunchedEffect(cardBounds != null) {
-        if (cardBounds != null && zoom.value > 0f && zooming == null) zoom.animateTo(0f, spring)
+    // The full-size lock screen is drawn first; it only starts shrinking once it is on screen
+    // looking like the real one.
+    var ready by remember { mutableStateOf(!zoomIn) }
+    LaunchedEffect(Unit) {
+        delay(READY_TIMEOUT_MS)
+        ready = true
+    }
+    LaunchedEffect(ready) { if (ready) onReady() }
+    // Over the lock screen, the window only has focus once the lock screen has made way.
+    val focused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(cardBounds != null, ready, focused) {
+        if (cardBounds != null && ready && focused && zoom.value > 0f && zooming == null) {
+            withFrameNanos {}
+            withFrameNanos {}
+            zoom.animateTo(0f, spring)
+        }
     }
 
     fun zoomOut(lockScreen: LockScreen, then: (LockScreen) -> Unit) {
@@ -267,6 +285,8 @@ fun SwitcherScreen(
                 clock = moving.clock,
                 live = true,
                 fixedTime = false,
+                fullScreen = true,
+                onReady = { ready = true },
                 corner = 36.dp * (1 - t).coerceIn(0f, 1f),
                 modifier = Modifier
                     .offset { IntOffset(left.toInt(), top.toInt()) }
@@ -275,3 +295,5 @@ fun SwitcherScreen(
         }
     }
 }
+
+private const val READY_TIMEOUT_MS = 1000L
