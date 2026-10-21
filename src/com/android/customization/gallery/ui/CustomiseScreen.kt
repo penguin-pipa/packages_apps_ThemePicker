@@ -739,7 +739,7 @@ private fun HomeDialog(
                         modifier = Modifier.width(62.dp).clickable { onPick(style) }) {
                         val shape = RoundedCornerShape(12.dp)
                         val base = Color(dominant ?: 0xFF444444.toInt())
-                        Box(Modifier.fillMaxWidth().aspectRatio(0.46f).clip(shape)
+                        Box(Modifier.fillMaxWidth().aspectRatio(lockScreenAspectRatio()).clip(shape)
                             .border(1.dp, Color(0x33FFFFFF), shape)) {
                             when (style) {
                                 HomeStyle.PAIR -> WallpaperImage(wallpaper, Modifier.fillMaxSize())

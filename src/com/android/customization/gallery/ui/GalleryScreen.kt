@@ -296,12 +296,12 @@ private fun Section(
                             wallpaper = tile.wallpaper,
                             clock = TILE_CLOCK,
                             weather = weather,
-                            modifier = Modifier.fillMaxWidth().aspectRatio(0.46f),
+                            modifier = Modifier.fillMaxWidth().aspectRatio(lockScreenAspectRatio()),
                             onClick = { tile.onClick?.invoke() ?: onPick(tile.wallpaper) },
                         )
                     } else {
                         Box(
-                            Modifier.fillMaxWidth().aspectRatio(0.46f)
+                            Modifier.fillMaxWidth().aspectRatio(lockScreenAspectRatio())
                                 .clip(RoundedCornerShape(24.dp)).background(Color(0xFF1C1C1E))
                                 .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
                                 .clickable { tile.onClick?.invoke() },

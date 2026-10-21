@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
@@ -142,6 +143,19 @@ fun LiveWallpaper(
             GalleryRenderer.draw(context, it.nativeCanvas, wallpaper, size.width.toInt(),
                 size.height.toInt(), time, weather = weather)
         }
+    }
+}
+
+/**
+ * The shape of the device's own lock screen. Previews use it so that on tablets and in landscape
+ * they match the real screen (and the custom clock frame) instead of a portrait phone.
+ */
+@Composable
+fun lockScreenAspectRatio(): Float {
+    val configuration = LocalConfiguration.current
+    val metrics = LocalContext.current.resources.displayMetrics
+    return remember(configuration.orientation, metrics.widthPixels, metrics.heightPixels) {
+        metrics.widthPixels.toFloat() / metrics.heightPixels.coerceAtLeast(1)
     }
 }
 

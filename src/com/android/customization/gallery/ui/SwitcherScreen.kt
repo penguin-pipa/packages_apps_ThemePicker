@@ -204,9 +204,10 @@ fun SwitcherScreen(
                         live = isCurrent,
                         fixedTime = false,
                         corner = 36.dp,
+                        // The largest card of the screen's shape that fits the page, so a landscape
+                        // tablet gets a landscape card rather than a cropped phone-shaped one.
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(0.46f)
+                            .aspectRatio(lockScreenAspectRatio())
                             .onGloballyPositioned {
                                 if (isCurrent && drag == 0f) cardBounds = it.boundsInRoot()
                             }
