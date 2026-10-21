@@ -184,7 +184,7 @@ fun SwitcherScreen(
                 val isCurrent = page == pager.currentPage
                 var drag by remember(lockScreen.id) { mutableFloatStateOf(0f) }
                 val lift by animateFloatAsState(drag, label = "lift")
-                Box(contentAlignment = Alignment.BottomCenter) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                     if (drag < 0) {
                         Box(
                             Modifier.padding(bottom = 24.dp).size(56.dp).clip(CircleShape)
@@ -207,6 +207,7 @@ fun SwitcherScreen(
                         // The largest card of the screen's shape that fits the page, so a landscape
                         // tablet gets a landscape card rather than a cropped phone-shaped one.
                         modifier = Modifier
+                            .align(Alignment.TopCenter)
                             .aspectRatio(lockScreenAspectRatio())
                             .onGloballyPositioned {
                                 if (isCurrent && drag == 0f) cardBounds = it.boundsInRoot()
